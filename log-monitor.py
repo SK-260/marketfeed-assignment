@@ -1,51 +1,58 @@
-#!/usr/bin/env python3
-
-
-import subprocess
-import signal
-import re
+import logging
+import time
+import os
 from collections import Counter
 
-# Function to handle keyboard interrupt (Ctrl+C)
-def signal_handler(signal, frame):
-    print("\nMonitoring stopped.")
-    exit(0)
+# Configuring Logging
+logging.basicConfig(level=logging.DEBUG, filename="server.log", format='%(asctime)s %(levelname)s: %(message)s',
+                    datefmt="%Y-%m-%d %H:%M:%S")
+# Creating a logger
+logger = logging.getLogger(__name__)
 
-# Function to monitor log file and perform analysis
-def monitor_log(log_file):
+# Creating a counter to count the keywords
+keyword_counter = Counter()
+
+
+def log_monitoring(file_path):
     try:
-        # Open the log file for reading
-        with subprocess.Popen(['tail', '-F', log_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True) as process:
-            # Initialize keyword counter
-            keyword_counter = Counter()
+        with open(file_path, "r") as file:  # Opening the Log File
+            file.seek(0, 2)  # Moving to End of file
+            while True:
+                line = file.readline()  # Read new logs
+                if line:
+                    print(line)  # Print the log
+                    analyze_new_line(line)  # Analyse the log
+                else:
+                    time.sleep(1)  # Sleep if no new log entered
 
-            # Continuous monitoring loop
-            for line in process.stdout:
-                # Display new log entries in real-time
-                print(line.strip())
+    # To exit the script
+    except KeyboardInterrupt:  # On pressing Ctrl+C
+        print("Report Summary")
+        for keyword, count in keyword_counter.items():
+            print(f"{keyword}: {count}")  # Print the keyword counts
+        print("\n Logging has been Interrupted. Exiting.")
 
-                # Perform basic analysis (count occurrences of specific keywords or patterns)
-                keywords = ['error', 'HTTP status']
-                for keyword in keywords:
-                    if re.search(keyword, line, re.IGNORECASE):
-                        keyword_counter[keyword] += 1
 
-                # Generate summary reports
-                if keyword_counter:
-                    print("\nSummary Report:")
-                    for keyword, count in keyword_counter.items():
-                        print(f"{keyword}: {count}")
+# Analysing each new log entered
+def analyze_new_line(new_line):
+    if "error" in new_line.lower():
+        logger.error(new_line)  # IF error is there log it as an Error
+        keyword_counter["error"] += 1
+    elif "debug" in new_line.lower() or "warning" in new_line.lower():
+        logger.debug(new_line)  # if warning is there log it as debug
+        keyword_counter["warning"] += 1
+    else:
+        logger.info(new_line)  # every other log is logged as info
 
-    except KeyboardInterrupt:
-        signal_handler(signal.SIGINT, None)
 
+# main program
 if __name__ == "__main__":
-    # Log file to monitor
-    log_file = "output.log"
+    # Ask user to enter the file path
+    file_path = input("Enter the path of file: ")
 
-    # Register signal handler for Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Start monitoring log file
-    print(f"Monitoring log file: {log_file}")
-    monitor_log(log_file)
+    # Check for file existence
+    if not os.path.exists(file_path):
+        print(f"The path {file_path} does not exist.")
+        exit()
+    # Call the log monitoring
+    log_monitoring(file_path)
